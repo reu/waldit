@@ -1,0 +1,56 @@
+# typed: strong
+module Waldit
+  extend Waldit::Context
+
+  def self.watched_tables=: () -> String
+                          | () -> ^(String table) -> bool
+                          | () -> ^(String table) -> ::Array[String]
+                          | () -> Integer
+                          | () -> singleton(ActiveRecord::Base)
+                          | (::Array[String] | ^(String table) -> bool tables) -> void
+
+  def self.configure: () { (singleton(Waldit) config) -> void } -> void
+end
+
+Waldit::VERSION: untyped
+
+module Waldit::Context
+  def with_context: [U] (Context context) { () -> U } -> U
+
+  def context: () -> Context?
+
+  def add_context: (Context added_context) -> void
+
+  def new_context: (?Context context) -> void
+end
+
+Waldit::Waldit::Context::Context: untyped
+
+class Waldit::Railtie < Rails::Railtie
+end
+
+module Waldit::Record
+  extend T::Helpers
+
+  def new: () -> ::Hash[String | Symbol, untyped]
+
+  def old: () -> ::Hash[String | Symbol, untyped]
+
+  def diff: () -> ::Hash[String | Symbol, [ untyped, untyped ]]
+end
+
+class Waldit::Watcher < Wal::StreamingWatcher
+  def audit_event: (InsertEvent | UpdateEvent | DeleteEvent event) -> void
+
+  def on_transaction_events: (::Enumerator[Event] events) -> void
+
+  def should_watch_table?: (String table) -> bool
+
+  def valid_context_prefix?: (String prefix) -> bool
+
+  def ignored_columns: (String table) -> ::Array[String]
+
+  def max_transaction_size: () -> Integer
+
+  def record: () -> singleton(ActiveRecord::Base)
+end
