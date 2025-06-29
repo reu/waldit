@@ -8,8 +8,8 @@ Gem::Specification.new do |spec|
   spec.authors = ["Rodrigo Navarro"]
   spec.email = ["rnavarro@rnavarro.com.br"]
 
-  spec.summary = "Postgres base audit trail for Rails."
-  spec.description = "Postgres base audit trail for your Active Records, with 100% consistency."
+  spec.summary = "Postgres based audit trail for Rails."
+  spec.description = "Postgres based audit trail for your Active Records, with 100% consistency."
   spec.homepage = "https://github.com/reu/waldit"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
