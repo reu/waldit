@@ -42,7 +42,7 @@ RSpec.configure do |config|
       create_table :waldit do |t|
         t.column :action, :waldit_action, null: false
         t.string :table_name, null: false
-        t.bigint :primary_key
+        t.string :primary_key
         t.bigint :transaction_id, null: false
         t.decimal :lsn, null: false, precision: 20, scale: 0
         t.timestamptz :commited_at

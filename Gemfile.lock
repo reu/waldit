@@ -113,6 +113,7 @@ GEM
       pp (>= 0.6.0)
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
+    json (2.12.2)
     logger (1.7.0)
     loofah (2.24.1)
       crass (~> 1.0.2)
@@ -217,6 +218,8 @@ GEM
     rdoc (6.14.1)
       erb
       psych (>= 4.0.0)
+    redis-client (0.25.0)
+      connection_pool
     reline (0.6.1)
       io-console (~> 0.5)
     rexml (3.4.1)
@@ -236,6 +239,12 @@ GEM
       sorbet-runtime
     rspec-support (3.13.4)
     securerandom (0.4.1)
+    sidekiq (8.0.5)
+      connection_pool (>= 2.5.0)
+      json (>= 2.9.0)
+      logger (>= 1.6.2)
+      rack (>= 3.1.0)
+      redis-client (>= 0.23.2)
     sorbet (0.5.12210)
       sorbet-static (= 0.5.12210)
     sorbet-runtime (0.5.12210)
@@ -309,6 +318,7 @@ DEPENDENCIES
   rbs
   rspec (~> 3.0)
   rspec-sorbet
+  sidekiq
   sorbet
   tapioca
   testcontainers-postgres

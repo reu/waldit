@@ -39,6 +39,23 @@ module Waldit::Record
   def diff: () -> ::Hash[String | Symbol, [ untyped, untyped ]]
 end
 
+module Waldit::Sidekiq
+end
+
+class Waldit::Waldit::Sidekiq::SaveContext
+  include ::Sidekiq::ClientMiddleware
+
+  def call: (untyped job_class, untyped job, untyped queue, untyped redis) -> untyped
+end
+
+class Waldit::Waldit::Sidekiq::LoadContext
+  include ::Sidekiq::ServerMiddleware
+
+  def call: (untyped job_instance, untyped job, untyped queue) { () -> untyped } -> untyped
+
+  def deserialize_context: (untyped job) -> untyped
+end
+
 class Waldit::Watcher < Wal::StreamingWatcher
   def audit_event: (InsertEvent | UpdateEvent | DeleteEvent event) -> void
 

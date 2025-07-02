@@ -35,4 +35,5 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "sorbet"
   spec.add_development_dependency "tapioca"
   spec.add_development_dependency "parlour"
+  spec.add_development_dependency "sidekiq"
 end

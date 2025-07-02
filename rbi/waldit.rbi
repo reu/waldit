@@ -63,6 +63,39 @@ module Waldit
     def diff; end
   end
 
+  module Sidekiq
+    class SaveContext
+      include ::Sidekiq::ClientMiddleware
+
+      sig do
+        params(
+          job_class: T.untyped,
+          job: T.untyped,
+          queue: T.untyped,
+          redis: T.untyped
+        ).returns(T.untyped)
+      end
+      def call(job_class, job, queue, redis); end
+    end
+
+    class LoadContext
+      include ::Sidekiq::ServerMiddleware
+
+      sig do
+        params(
+          job_instance: T.untyped,
+          job: T.untyped,
+          queue: T.untyped,
+          block: T.untyped
+        ).returns(T.untyped)
+      end
+      def call(job_instance, job, queue, &block); end
+
+      sig { params(job: T.untyped).returns(T.untyped) }
+      def deserialize_context(job); end
+    end
+  end
+
   class Watcher < Wal::StreamingWatcher
     extend T::Sig
 
