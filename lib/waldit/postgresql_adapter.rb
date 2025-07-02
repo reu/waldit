@@ -27,6 +27,46 @@ module Waldit
       end
     end
 
+    def exec_no_cache(sql, ...)
+      return super if READ_QUERY_REGEXP.match? sql
+      return super if @current_waldit_context == Waldit.context.hash
+
+      if transaction_open?
+        set_waldit_context!
+        super
+
+      elsif Waldit.context
+        # We are trying to execute a query with waldit context while not in a transaction, so we start one
+        transaction do
+          set_waldit_context!
+          super
+        end
+
+      else
+        super
+      end
+    end
+
+    def exec_cache(sql, ...)
+      return super if READ_QUERY_REGEXP.match? sql
+      return super if @current_waldit_context == Waldit.context.hash
+
+      if transaction_open?
+        set_waldit_context!
+        super
+
+      elsif Waldit.context
+        # We are trying to execute a query with waldit context while not in a transaction, so we start one
+        transaction do
+          set_waldit_context!
+          super
+        end
+
+      else
+        super
+      end
+    end
+
     def begin_db_transaction(...)
       @current_waldit_context = nil.hash
       super
