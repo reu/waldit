@@ -65,6 +65,27 @@ RSpec.describe Waldit do
     WalditTrail.delete_all
   end
 
+  it "audits deletes" do
+    record = Record.create(name: "1")
+
+    watcher = Waldit::Watcher.new
+    replication = create_testing_wal_replication(watcher)
+
+    WalditTrail.transaction do
+      record.delete
+    end
+
+    replicate_single_transaction(replication)
+
+    audit = WalditTrail.sole
+
+    assert_equal "delete", audit.action
+    assert_equal "1", audit.old["name"]
+    assert_nil audit.new["name"]
+  ensure
+    WalditTrail.delete_all
+  end
+
   it "audits only the delete event even when the record is updated on the same transaction" do
     record = Record.create(name: "1")
 

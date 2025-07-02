@@ -60,7 +60,7 @@ module Waldit
         else
           # Finally the most common case: just deleting a record not created or updated on this transaction
           record.upsert(
-            audit.merge(action: "delete", old:),
+            audit.merge(action: "delete", old: event.old),
             unique_by:,
             on_duplicate: :update,
           )
