@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    waldit (0.0.2)
+    waldit (0.0.3)
       activerecord (>= 7)
       wal (>= 0.0.2)
 
