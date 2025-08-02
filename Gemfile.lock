@@ -3,7 +3,7 @@ PATH
   specs:
     waldit (0.0.3)
       activerecord (>= 7)
-      wal (>= 0.0.2)
+      wal (>= 0.0.3)
 
 GEM
   remote: https://rubygems.org/
@@ -282,7 +282,7 @@ GEM
       concurrent-ruby (~> 1.0)
     uri (1.0.3)
     useragent (0.16.11)
-    wal (0.0.2)
+    wal (0.0.3)
       activerecord (>= 7)
       docopt
       ostruct

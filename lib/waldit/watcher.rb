@@ -1,13 +1,11 @@
 # frozen_string_literal: true
-# typed: true
 
 require "wal"
 
 module Waldit
   class Watcher < Wal::StreamingWatcher
-    extend T::Sig
+    include Wal
 
-    sig { params(event: T.any(InsertEvent, UpdateEvent, DeleteEvent)).void }
     def audit_event(event)
       return unless event.primary_key
 
@@ -68,7 +66,6 @@ module Waldit
       end
     end
 
-    sig { override.params(events: T::Enumerator[Event]).void }
     def on_transaction_events(events)
       counter = 0
       catch :finish do
@@ -96,27 +93,22 @@ module Waldit
       end
     end
 
-    sig { params(table: String).returns(T::Boolean) }
     def should_watch_table?(table)
       Waldit.watched_tables.call(table)
     end
 
-    sig { params(prefix: String).returns(T::Boolean) }
     def valid_context_prefix?(prefix)
       prefix == Waldit.context_prefix
     end
 
-    sig { params(table: String).returns(T::Array[String]) }
     def ignored_columns(table)
       Waldit.ignored_columns.call(table)
     end
 
-    sig { returns(Integer) }
     def max_transaction_size
       Waldit.max_transaction_size
     end
 
-    sig { returns(T.class_of(ActiveRecord::Base)) }
     def record
       Waldit.model
     end

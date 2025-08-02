@@ -1,5 +1,4 @@
 # frozen_string_literal: true
-# typed: true
 
 require_relative "waldit/version"
 require_relative "waldit/context"
@@ -8,19 +7,11 @@ require_relative "waldit/record"
 require_relative "waldit/watcher"
 
 module Waldit
-  extend T::Sig
   extend Waldit::Context
 
   class << self
-    extend T::Sig
-
-    sig { returns(String) }
-    attr_accessor :context_prefix
-
-    sig { returns(T.proc.params(table: String).returns(T::Boolean)) }
     attr_reader :watched_tables
 
-    sig { params(tables: T.any(T::Array[String], T.proc.params(table: String).returns(T::Boolean))).void }
     def watched_tables=(tables)
       case tables
       when Array
@@ -30,17 +21,12 @@ module Waldit
       end
     end
 
-    sig { returns(T.proc.params(table: String).returns(T::Array[String])) }
     attr_accessor :ignored_columns
-
-    sig { returns(Integer) }
     attr_accessor :max_transaction_size
-
-    sig { returns(T.class_of(ActiveRecord::Base)) }
     attr_accessor :model
+    attr_accessor :context_prefix
   end
 
-  sig { params(block: T.proc.params(config: T.class_of(Waldit)).void).void }
   def self.configure(&block)
     yield self
   end

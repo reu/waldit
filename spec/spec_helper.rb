@@ -1,6 +1,4 @@
-require "rspec/sorbet"
 require "testcontainers/postgres"
-require "debug"
 require "waldit"
 
 RSpec.configure do |config|
