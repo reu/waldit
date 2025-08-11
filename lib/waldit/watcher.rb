@@ -9,85 +9,61 @@ module Waldit
     def audit_event(event)
       return unless event.primary_key
 
-      audit = {
-        transaction_id: event.transaction_id,
-        lsn: event.lsn,
-        context: event.context,
-        table_name: event.table,
-        primary_key: event.primary_key,
-      }
-
-      unique_by = %i[table_name primary_key transaction_id]
+      audit = [event.transaction_id, event.lsn, event.table, event.primary_key, event.context.to_json]
 
       case event
       when InsertEvent
-        record.upsert(
-          audit.merge(action: "insert", new: event.new),
-          unique_by:,
-          on_duplicate: :update,
-        )
+        @connection.exec_prepared("waldit_insert", audit + [event.new.to_json])
 
       when UpdateEvent
         return if event.diff.without(ignored_columns(event.table)).empty?
-        record.upsert(
-          audit.merge(action: "update", old: event.old, new: event.new),
-          unique_by:,
-          on_duplicate: :update,
-          update_only: %w[new],
-        )
+        @connection.exec_prepared("waldit_update", audit + [event.old.to_json, event.new.to_json])
 
       when DeleteEvent
-        case record.where(audit.slice(*unique_by)).pluck(:action, :old).first
-        in ["insert", _]
-          # We are deleting a record that was inserted on this transaction, which means we don't need to audit anything,
-          # as the record was never commited
-          record.where(audit.slice(*unique_by)).delete_all
-
-        in ["update", old]
-          # We are deleting a record we updated on this transaction. Here we are making sure we keep the correct previous
-          # state, and not the state at the moment of the deletion
-          record.upsert(
-            audit.merge(action: "delete", old:, new: {}),
-            unique_by:,
-            on_duplicate: :update,
-          )
-
-        in ["delete", _]
-          # This should never happend, we wouldn't be able to delete a record that was already deleted on this transaction
-
+        case @connection.exec_prepared("waldit_delete_cleanup", [event.transaction_id, event.table, event.primary_key]).values
+        in [["update", previous_old]]
+          @connection.exec_prepared("waldit_delete", audit + [previous_old])
+        in []
+          @connection.exec_prepared("waldit_delete", audit + [event.old.to_json])
         else
-          # Finally the most common case: just deleting a record not created or updated on this transaction
-          record.upsert(
-            audit.merge(action: "delete", old: event.old),
-            unique_by:,
-            on_duplicate: :update,
-          )
+          # Don't need to audit anything on this case
         end
       end
     end
 
     def on_transaction_events(events)
-      counter = 0
-      catch :finish do
-        loop do
-          record.transaction do
-            events.each do |event|
-              case event
-              when CommitTransactionEvent
-                record
-                  .where(transaction_id: event.transaction_id)
-                  .update_all(commited_at: event.timestamp) if counter > 0
-                # Using throw to break the outside loop and finish the thread gracefully
-                throw :finish
+      record.transaction do
+        @connection = record.connection.raw_connection
+        insert_prepared = false
+        update_prepared = false
+        delete_prepared = false
 
-              when InsertEvent, UpdateEvent, DeleteEvent
-                audit_event(event)
+        events.each do |event|
+          case event
+          when CommitTransactionEvent
+            record.where(transaction_id: event.transaction_id).update_all(commited_at: event.timestamp)
 
-                counter += 1
-                # We break here to force a commit, so we don't keep a single big transaction pending
-                break if counter % max_transaction_size == 0
-              end
+          when InsertEvent
+            unless insert_prepared
+              prepare_insert
+              insert_prepared = true
             end
+            audit_event(event)
+
+          when UpdateEvent
+            unless update_prepared
+              prepare_update
+              update_prepared = true
+            end
+            audit_event(event)
+
+          when DeleteEvent
+            unless delete_prepared
+              prepare_delete
+              prepare_delete_cleanup
+              delete_prepared = true
+            end
+            audit_event(event)
           end
         end
       end
@@ -111,6 +87,47 @@ module Waldit
 
     def record
       Waldit.model
+    end
+
+    private
+
+    def prepare_insert
+      @connection.prepare("waldit_insert", <<~SQL)
+        INSERT INTO #{record.table_name} (transaction_id, lsn, table_name, primary_key, action, context, new)
+        VALUES ($1, $2, $3, $4, 'insert'::waldit_action, $5, $6)
+        ON CONFLICT (table_name, primary_key, transaction_id)
+        DO UPDATE SET new = #{record.table_name}.new
+      SQL
+    end
+
+    def prepare_update
+      @connection.prepare("waldit_update", <<~SQL)
+        INSERT INTO #{record.table_name} (transaction_id, lsn, table_name, primary_key, action, context, old, new)
+        VALUES ($1, $2, $3, $4, 'update'::waldit_action, $5, $6, $7)
+        ON CONFLICT (table_name, primary_key, transaction_id)
+        DO UPDATE SET new = excluded.new
+      SQL
+    end
+
+    def prepare_delete
+      @connection.prepare("waldit_delete", <<~SQL)
+        INSERT INTO #{record.table_name} (transaction_id, lsn, table_name, primary_key, action, context, old, new)
+        VALUES ($1, $2, $3, $4, 'delete'::waldit_action, $5, $6, '{}'::jsonb)
+        ON CONFLICT (table_name, primary_key, transaction_id)
+        DO UPDATE SET old = #{record.table_name}.old
+      SQL
+    end
+
+    def prepare_delete_cleanup
+      @connection.prepare("waldit_delete_cleanup", <<~SQL)
+        DELETE FROM #{record.table_name}
+        WHERE
+          transaction_id = $1
+          AND table_name = $2
+          AND primary_key = $3
+          AND action IN ('insert'::waldit_action, 'update'::waldit_action)
+        RETURNING action, old
+      SQL
     end
   end
 end
