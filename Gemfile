@@ -9,6 +9,7 @@ gem "rake", "~> 13.0"
 gem "debug"
 
 group :test do
+  gem "pry"
   gem "rails"
   gem "minitest"
   gem "rspec", "~> 3.0"
