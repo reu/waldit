@@ -17,8 +17,13 @@ module Waldit
       include ::Sidekiq::ServerMiddleware
 
       def call(job_instance, job, queue, &block)
-        context = deserialize_context(job) || {}
-        Waldit.with_context(context.merge(background_job: job_instance.class.to_s), &block)
+        background_job = case job["class"]
+        in "ActiveJob::QueueAdapters::SidekiqAdapter::JobWrapper"
+          job["args"][0]["job_class"]
+        in klass
+          klass
+        end
+        Waldit.with_context((deserialize_context(job) || {}).merge(background_job:), &block)
       end
 
       private
