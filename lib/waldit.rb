@@ -21,6 +21,21 @@ module Waldit
       end
     end
 
+    attr_reader :store_changes
+
+    def store_changes=(changes)
+      case changes
+      when Symbol
+        changes = [changes].to_set
+        @store_changes = -> { changes }
+      when Array
+        changes = changes.map(&:to_sym).to_set
+        @store_changes = -> { changes }
+      else
+        @store_changes = changes
+      end
+    end
+
     attr_accessor :ignored_columns
     attr_accessor :max_transaction_size
     attr_accessor :model
@@ -35,6 +50,8 @@ module Waldit
     config.context_prefix = "waldit_context"
 
     config.watched_tables = -> table { table != "waldit" }
+
+    config.store_changes = -> table { %i[old new diff] }
 
     config.ignored_columns = -> table { %w[created_at updated_at] }
 

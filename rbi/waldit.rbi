@@ -11,6 +11,9 @@ module Waldit
     sig { returns(T.proc.params(table: String).returns(T::Boolean)) }
     attr_reader :watched_tables
 
+    sig { returns(T.proc.params(table: String).returns(T::Array[Symbol])) }
+    attr_reader :store_changes
+
     sig { returns(T.proc.params(table: String).returns(T::Array[String])) }
     attr_accessor :ignored_columns
 
@@ -23,6 +26,9 @@ module Waldit
 
   sig { params(tables: T.any(T::Array[String], T.proc.params(table: String).returns(T::Boolean))).void }
   def self.watched_tables=(tables); end
+
+  sig { params(changes: T.any(Symbol, T::Array[Symbol], T.proc.params(table: String).returns(T::Array[Symbol]))).void }
+  def self.store_changes=(changes); end
 
   sig { params(block: T.proc.params(config: T.class_of(Waldit)).void).void }
   def self.configure(&block); end

@@ -45,8 +45,9 @@ RSpec.configure do |config|
         t.bigint :transaction_id, null: false
         t.decimal :lsn, null: false, precision: 20, scale: 0
         t.timestamptz :commited_at
-        t.jsonb :old, null: false, default: {}
-        t.jsonb :new, null: false, default: {}
+        t.jsonb :old, null: true
+        t.jsonb :new, null: true
+        t.jsonb :diff, null: true
         t.jsonb :context, null: false, default: {}
       end
 

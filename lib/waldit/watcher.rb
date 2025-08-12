@@ -34,6 +34,7 @@ module Waldit
     def on_transaction_events(events)
       record.transaction do
         @connection = record.connection.raw_connection
+        tables = Set.new
         insert_prepared = false
         update_prepared = false
         delete_prepared = false
@@ -43,7 +44,29 @@ module Waldit
           when CommitTransactionEvent
             record.where(transaction_id: event.transaction_id).update_all(commited_at: event.timestamp)
 
+            log_new = tables.filter { |table| Waldit.store_changes.call(table).include? :new }
+            log_old = tables.filter { |table| Waldit.store_changes.call(table).include? :old }
+            log_diff = tables.filter { |table| Waldit.store_changes.call(table).include? :diff }
+            record.where(transaction_id: event.transaction_id).update_all(<<~SQL)
+              new = CASE WHEN table_name = ANY (ARRAY[#{log_new.map { |table| "'#{table}'" }.join(",")}]::varchar[]) THEN new ELSE null END,
+              old = CASE WHEN table_name = ANY (ARRAY[#{log_old.map { |table| "'#{table}'" }.join(",")}]::varchar[]) THEN old ELSE null END,
+              diff =
+                CASE WHEN table_name = ANY (ARRAY[#{log_diff.map { |table| "'#{table}'" }.join(",")}]::varchar[]) THEN (
+                  SELECT
+                    jsonb_object_agg(
+                      coalesce(old_kv.key, new_kv.key),
+                      jsonb_build_array(old_kv.value, new_kv.value)
+                    )
+                  FROM jsonb_each(old) AS old_kv
+                  FULL OUTER JOIN jsonb_each(new) AS new_kv ON old_kv.key = new_kv.key
+                  WHERE old_kv.value IS DISTINCT FROM new_kv.value
+                )
+                ELSE null
+                END
+            SQL
+
           when InsertEvent
+            tables << event.table
             unless insert_prepared
               prepare_insert
               insert_prepared = true
@@ -51,6 +74,7 @@ module Waldit
             audit_event(event)
 
           when UpdateEvent
+            tables << event.table
             unless update_prepared
               prepare_update
               update_prepared = true
@@ -58,6 +82,7 @@ module Waldit
             audit_event(event)
 
           when DeleteEvent
+            tables << event.table
             unless delete_prepared
               prepare_delete
               prepare_delete_cleanup
@@ -111,8 +136,8 @@ module Waldit
 
     def prepare_delete
       @connection.prepare("waldit_delete", <<~SQL)
-        INSERT INTO #{record.table_name} (transaction_id, lsn, table_name, primary_key, action, context, old, new)
-        VALUES ($1, $2, $3, $4, 'delete'::waldit_action, $5, $6, '{}'::jsonb)
+        INSERT INTO #{record.table_name} (transaction_id, lsn, table_name, primary_key, action, context, old)
+        VALUES ($1, $2, $3, $4, 'delete'::waldit_action, $5, $6)
         ON CONFLICT (table_name, primary_key, transaction_id)
         DO UPDATE SET old = #{record.table_name}.old
       SQL
