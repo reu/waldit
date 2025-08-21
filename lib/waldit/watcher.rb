@@ -44,14 +44,19 @@ module Waldit
           when CommitTransactionEvent
             record.where(transaction_id: event.transaction_id).update_all(commited_at: event.timestamp)
 
-            log_new = tables.filter { |table| Waldit.store_changes.call(table).include? :new }
-            log_old = tables.filter { |table| Waldit.store_changes.call(table).include? :old }
-            log_diff = tables.filter { |table| Waldit.store_changes.call(table).include? :diff }
-            record.where(transaction_id: event.transaction_id).update_all(<<~SQL)
-              new = CASE WHEN table_name = ANY (ARRAY[#{log_new.map { |table| "'#{table}'" }.join(",")}]::varchar[]) THEN new ELSE null END,
-              old = CASE WHEN table_name = ANY (ARRAY[#{log_old.map { |table| "'#{table}'" }.join(",")}]::varchar[]) THEN old ELSE null END,
+            changes = [:old, :new, :diff]
+              .map { |diff| [diff, tables.filter { |table| Waldit.store_changes.call(table).include? diff }] }
+              .to_h
+
+            log_new = (changes[:new] || []).map { |table| "'#{table}'" }.join(",")
+            log_old = (changes[:old] || []).map { |table| "'#{table}'" }.join(",")
+            log_diff = (changes[:diff] || []).map { |table| "'#{table}'" }.join(",")
+
+            record.where(transaction_id: event.transaction_id, action: "update").update_all(<<~SQL)
+              new = CASE WHEN table_name = ANY (ARRAY[#{log_new}]::varchar[]) THEN new ELSE null END,
+              old = CASE WHEN table_name = ANY (ARRAY[#{log_old}]::varchar[]) THEN old ELSE null END,
               diff =
-                CASE WHEN table_name = ANY (ARRAY[#{log_diff.map { |table| "'#{table}'" }.join(",")}]::varchar[]) THEN (
+                CASE WHEN table_name = ANY (ARRAY[#{log_diff}]::varchar[]) THEN (
                   SELECT
                     jsonb_object_agg(
                       coalesce(old_kv.key, new_kv.key),
