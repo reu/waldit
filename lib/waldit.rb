@@ -27,10 +27,10 @@ module Waldit
       case changes
       when Symbol
         changes = [changes].to_set
-        @store_changes = -> { changes }
+        @store_changes = -> table { changes }
       when Array
         changes = changes.map(&:to_sym).to_set
-        @store_changes = -> { changes }
+        @store_changes = -> table { changes }
       else
         @store_changes = changes
       end
