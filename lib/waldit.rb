@@ -51,7 +51,7 @@ module Waldit
 
     config.watched_tables = -> table { table != "waldit" }
 
-    config.store_changes = -> table { %i[old new diff] }
+    config.store_changes = -> table { %i[old new] }
 
     config.ignored_columns = -> table { %w[created_at updated_at] }
 
