@@ -15,6 +15,7 @@ module Waldit
 
       require_relative "migration"
       ActiveRecord::Migration.include Waldit::Migration
+      ActiveRecord::Schema.include Waldit::Migration
     end
   end
 end

@@ -2,16 +2,16 @@
 
 module Waldit
   module Migration
-    def create_waldit_table(name = "waldit", &block)
+    def create_waldit_table(name = "waldit")
       reversible do |dir|
         dir.up { execute "CREATE TYPE waldit_action AS ENUM ('insert', 'update', 'delete')" }
         dir.down { execute "DROP TYPE waldit_action" }
       end
 
-      create_table :waldit do |t|
+      create_table name do |t|
         t.column :action, :waldit_action, null: false
         t.string :table_name, null: false
-        t.string :primary_key
+        t.string :primary_key, null: false
         t.bigint :transaction_id, null: false
         t.decimal :lsn, null: false, precision: 20, scale: 0
         t.timestamptz :commited_at
@@ -19,13 +19,13 @@ module Waldit
         t.jsonb :old, null: true
         t.jsonb :new, null: true
         t.jsonb :diff, null: true
-        block.call(t)
+        yield t if block_given?
       end
 
-      add_index :waldit, [:table_name, :primary_key, :transaction_id], unique: true
-      add_index :waldit, [:transaction_id, :lsn]
-      add_index :waldit, :commited_at
-      add_index :waldit, :context, using: :gin, opclass: :jsonb_path_ops
+      add_index name, [:table_name, :primary_key, :transaction_id], unique: true
+      add_index name, [:transaction_id, :lsn]
+      add_index name, :commited_at
+      add_index name, :context, using: :gin, opclass: :jsonb_path_ops
     end
 
     def create_waldit_publication

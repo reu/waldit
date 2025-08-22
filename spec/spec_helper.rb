@@ -29,38 +29,25 @@ RSpec.configure do |config|
     }
 
     ActiveRecord::ConnectionAdapters.register(
-      "postgresqlwaldit",
+      "waldit",
       "Waldit::PostgreSQLAdapter",
       "waldit/postgresql_adapter",
     )
 
-    ActiveRecord::Base.establish_connection(**pg_config.merge(adapter: "postgresqlwaldit"))
+    require "waldit/migration"
+    ActiveRecord::Migration.include Waldit::Migration
+    ActiveRecord::Schema.include Waldit::Migration
+
+    ActiveRecord::Base.establish_connection(**pg_config.merge(adapter: "waldit"))
     ActiveRecord::Schema.define do
-      execute "CREATE TYPE waldit_action AS ENUM ('insert', 'update', 'delete')"
-
-      create_table :waldit do |t|
-        t.column :action, :waldit_action, null: false
-        t.string :table_name, null: false
-        t.string :primary_key
-        t.bigint :transaction_id, null: false
-        t.decimal :lsn, null: false, precision: 20, scale: 0
-        t.timestamptz :commited_at
-        t.jsonb :old, null: true
-        t.jsonb :new, null: true
-        t.jsonb :diff, null: true
-        t.jsonb :context, null: false, default: {}
-      end
-
-      add_index :waldit, [:table_name, :primary_key, :transaction_id], unique: true
-      add_index :waldit, [:transaction_id, :lsn]
-      add_index :waldit, :commited_at
+      create_waldit_table
+      create_waldit_publication
 
       create_table :records, force: true do |t|
         t.string :name
       end
 
-      execute "ALTER TABLE records REPLICA IDENTITY FULL"
-      execute "CREATE PUBLICATION waldit FOR TABLE records"
+      add_table_to_waldit :records
     end
 
     class Record < ActiveRecord::Base
