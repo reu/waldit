@@ -12,6 +12,9 @@ module Waldit
           "waldit/postgresql_adapter",
         )
       end
+
+      require_relative "migration"
+      ActiveRecord::Migration.include Waldit::Migration
     end
   end
 end
