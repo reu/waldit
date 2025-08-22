@@ -30,8 +30,8 @@ module Waldit
 
     def create_waldit_publication
       reversible do |dir|
-        dir.up { execute "CREATE PUBLICATION waldit" }
-        dir.down { execute "DROP PUBLICATION waldit" }
+        dir.up { execute "CREATE PUBLICATION waldit_publication" }
+        dir.down { execute "DROP PUBLICATION waldit_publication" }
       end
     end
 
@@ -39,10 +39,10 @@ module Waldit
       reversible do |dir|
         dir.up do
           execute "ALTER TABLE #{table} REPLICA IDENTITY FULL"
-          execute "ALTER PUBLICATION waldit ADD TABLE #{table}"
+          execute "ALTER PUBLICATION waldit_publication ADD TABLE #{table}"
         end
         dir.down do
-          execute "ALTER PUBLICATION waldit DROP TABLE #{table}"
+          execute "ALTER PUBLICATION waldit_publication DROP TABLE #{table}"
           execute "ALTER TABLE #{table} REPLICA IDENTITY DEFAULT"
         end
       end
@@ -51,12 +51,12 @@ module Waldit
     def remove_table_from_waldit(table)
       reversible do |dir|
         dir.up do
-          execute "ALTER PUBLICATION waldit DROP TABLE #{table}"
+          execute "ALTER PUBLICATION waldit_publication DROP TABLE #{table}"
           execute "ALTER TABLE #{table} REPLICA IDENTITY DEFAULT"
         end
         dir.down do
           execute "ALTER TABLE #{table} REPLICA IDENTITY FULL"
-          execute "ALTER PUBLICATION waldit ADD TABLE #{table}"
+          execute "ALTER PUBLICATION waldit_publication ADD TABLE #{table}"
         end
       end
     end

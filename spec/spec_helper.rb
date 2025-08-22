@@ -68,7 +68,7 @@ RSpec.configure do |config|
           use_temporary_slot: true,
           db_config: db_config || RSpec.configuration.pg_config,
         )
-        .replicate(watcher, publications: ["waldit"])
+        .replicate(watcher, publications: ["waldit_publication"])
     end
 
     def replicate_single_transaction(replication_stream)
