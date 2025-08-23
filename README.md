@@ -31,11 +31,11 @@ Or install it yourself as:
 
 1.  **Configure your database adapter:**
 
-    First step is to configure in your `config/database.yml` and change your adapter to `postgresqlwaldit`, which is a special adapter that allows injecting `waldit` contextual information on your transactions:
+    First step is to configure in your `config/database.yml` and change your adapter to `waldit`, which is a special adapter that allows injecting `waldit` contextual information on your transactions:
 
     ```yaml
     default: &default
-      adapter: postgresqlwaldit
+      adapter: waldit
       # ...
     ```
 

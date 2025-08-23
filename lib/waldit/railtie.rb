@@ -5,13 +5,16 @@ require "rails/railtie"
 module Waldit
   class Railtie < Rails::Railtie
     config.before_configuration do
-      ["waldit", "postgresqlwaldit"].each do |adapter_name|
-        ActiveRecord::ConnectionAdapters.register(
-          adapter_name,
-          "Waldit::PostgreSQLAdapter",
-          "waldit/postgresql_adapter",
-        )
-      end
+      ActiveRecord::ConnectionAdapters.register(
+        "waldit",
+        "Waldit::PostgreSQLAdapter",
+        "waldit/postgresql_adapter",
+      )
+
+      ActiveRecord::Tasks::DatabaseTasks.register_task(
+        "waldit",
+        "ActiveRecord::Tasks::PostgreSQLDatabaseTasks",
+      )
 
       require_relative "migration"
       ActiveRecord::Migration.include Waldit::Migration
