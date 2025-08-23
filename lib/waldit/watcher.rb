@@ -13,18 +13,22 @@ module Waldit
 
       case event
       when InsertEvent
-        @connection.exec_prepared("waldit_insert", audit + [event.new.to_json])
+        new_attributes = clean_attributes(event.table, event.new)
+        @connection.exec_prepared("waldit_insert", audit + [new_attributes.to_json])
 
       when UpdateEvent
         return if event.diff.without(ignored_columns(event.table)).empty?
-        @connection.exec_prepared("waldit_update", audit + [event.old.to_json, event.new.to_json])
+        old_attributes = clean_attributes(event.table, event.old)
+        new_attributes = clean_attributes(event.table, event.new)
+
+        @connection.exec_prepared("waldit_update", audit + [old_attributes.to_json, new_attributes.to_json])
 
       when DeleteEvent
         case @connection.exec_prepared("waldit_delete_cleanup", [event.transaction_id, event.table, event.primary_key]).values
         in [["update", previous_old]]
           @connection.exec_prepared("waldit_delete", audit + [previous_old])
         in []
-          @connection.exec_prepared("waldit_delete", audit + [event.old.to_json])
+          @connection.exec_prepared("waldit_delete", audit + [clean_attributes(event.table, event.old).to_json])
         else
           # Don't need to audit anything on this case
         end
@@ -109,6 +113,10 @@ module Waldit
 
     def ignored_columns(table)
       Waldit.ignored_columns.call(table)
+    end
+
+    def clean_attributes(table, attributes)
+      attributes.without(ignored_columns(table))
     end
 
     def max_transaction_size
