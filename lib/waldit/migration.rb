@@ -24,6 +24,7 @@ module Waldit
 
       add_index name, [:table_name, :primary_key, :transaction_id], unique: true
       add_index name, [:transaction_id, :lsn]
+      add_index name, [:action, :table_name, :commited_at]
       add_index name, :commited_at
       add_index name, :context, using: :gin, opclass: :jsonb_path_ops
     end
