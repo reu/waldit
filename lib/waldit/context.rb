@@ -16,11 +16,7 @@ module Waldit
     end
 
     def add_context(added_context)
-      if (context = self.context)
-        context.merge!(added_context.as_json)
-      else
-        new_context(added_context)
-      end
+      context&.merge!(added_context.as_json)
     end
 
     def new_context(context = {})
