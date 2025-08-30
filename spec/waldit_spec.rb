@@ -155,9 +155,9 @@ RSpec.describe Waldit do
     watcher = Waldit::Watcher.new
     replication = create_testing_wal_replication(watcher)
 
-    Waldit.with_context(a: 1) do
+    Waldit.with_context(a: 1, b: 2) do
       record.update(name: "1")
-      Waldit.with_context(b: 2) { record.update(name: "2") }
+      Waldit.with_context(a: 2, c: 10) { record.update(name: "2") }
       record.update(name: "3")
     end
     record.update(name: "4")
@@ -170,9 +170,9 @@ RSpec.describe Waldit do
 
     update1, update2, update3, update4 = Waldit.model.order(:transaction_id, :lsn)
 
-    assert_equal({ "a" => 1 }, update1.context)
-    assert_equal({ "a" => 1, "b" => 2 }, update2.context)
-    assert_equal({ "a" => 1 }, update3.context)
+    assert_equal({ "a" => 1, "b" => 2 }, update1.context)
+    assert_equal({ "a" => 2, "b" => 2, "c" => 10 }, update2.context)
+    assert_equal({ "a" => 1, "b" => 2 }, update3.context)
     assert_empty update4.context
 
   ensure
