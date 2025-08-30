@@ -17,9 +17,6 @@ module Waldit
     sig { returns(T.proc.params(table: String).returns(T::Array[String])) }
     attr_accessor :ignored_columns
 
-    sig { returns(Integer) }
-    attr_accessor :max_transaction_size
-
     sig { returns(T.class_of(ActiveRecord::Base)) }
     attr_accessor :model
   end
@@ -119,9 +116,6 @@ module Waldit
 
     sig { params(table: String).returns(T::Array[String]) }
     def ignored_columns(table); end
-
-    sig { returns(Integer) }
-    def max_transaction_size; end
 
     sig { returns(T.class_of(ActiveRecord::Base)) }
     def record; end

@@ -119,10 +119,6 @@ module Waldit
       attributes.without(ignored_columns(table))
     end
 
-    def max_transaction_size
-      Waldit.max_transaction_size
-    end
-
     def record
       Waldit.model
     end

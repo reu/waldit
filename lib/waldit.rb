@@ -37,7 +37,6 @@ module Waldit
     end
 
     attr_accessor :ignored_columns
-    attr_accessor :max_transaction_size
     attr_accessor :model
     attr_accessor :context_prefix
   end
@@ -54,8 +53,6 @@ module Waldit
     config.store_changes = -> table { %i[old new] }
 
     config.ignored_columns = -> table { %w[created_at updated_at] }
-
-    config.max_transaction_size = 10_000
 
     config.model = Class.new(ActiveRecord::Base) do
       include Waldit::Record
