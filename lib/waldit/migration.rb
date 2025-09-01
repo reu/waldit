@@ -14,7 +14,7 @@ module Waldit
         t.string :primary_key, null: false
         t.bigint :transaction_id, null: false
         t.decimal :lsn, null: false, precision: 20, scale: 0
-        t.timestamptz :commited_at
+        t.timestamptz :committed_at
         t.jsonb :context, null: false, default: {}
         t.jsonb :old, null: true
         t.jsonb :new, null: true
@@ -24,8 +24,8 @@ module Waldit
 
       add_index name, [:table_name, :primary_key, :transaction_id], unique: true
       add_index name, [:transaction_id, :lsn]
-      add_index name, [:action, :table_name, :commited_at]
-      add_index name, :commited_at
+      add_index name, [:action, :table_name, :committed_at]
+      add_index name, :committed_at
       add_index name, :context, using: :gin, opclass: :jsonb_path_ops
     end
 

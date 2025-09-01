@@ -46,7 +46,7 @@ module Waldit
         events.each do |event|
           case event
           when CommitTransactionEvent
-            record.where(transaction_id: event.transaction_id).update_all(commited_at: event.timestamp)
+            record.where(transaction_id: event.transaction_id).update_all(committed_at: event.timestamp)
 
             changes = [:old, :new, :diff]
               .map { |diff| [diff, tables.filter { |table| Waldit.store_changes.call(table).include? diff }] }
