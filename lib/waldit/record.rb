@@ -4,11 +4,10 @@ module Waldit
   module Record
     def self.included(base)
       base.class_eval do
-        default_scope { order(:committed_at) }
-        scope :from_table, -> table { where(table_name: table) }
+        scope :from_table, -> table { order(:committed_at).where(table_name: table) }
         scope :from_model, -> model { from_table(model.table_name) }
         scope :for, -> record { from_model(record.class).where(primary_key: record.id) }
-        scope :with_context, -> ctx { where("context @> ?", ctx.to_json) }
+        scope :with_context, -> ctx { order(:committed_at).where("context @> ?", ctx.to_json) }
       end
     end
 
