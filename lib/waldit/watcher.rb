@@ -35,72 +35,58 @@ module Waldit
       end
     end
 
+    def initialize(*)
+      super
+      initialize_connection
+      @retry = false
+    end
+
     def on_transaction_events(events)
-      record.transaction do
-        @connection = record.connection.raw_connection
+      @connection.transaction do
         tables = Set.new
-        insert_prepared = false
-        update_prepared = false
-        delete_prepared = false
 
         events.each do |event|
           case event
           when CommitTransactionEvent
-            record.where(transaction_id: event.transaction_id).update_all(committed_at: event.timestamp)
-
             changes = [:old, :new, :diff]
               .map { |diff| [diff, tables.filter { |table| Waldit.store_changes.call(table).include? diff }] }
               .to_h
 
-            log_new = (changes[:new] || []).map { |table| "'#{table}'" }.join(",")
-            log_old = (changes[:old] || []).map { |table| "'#{table}'" }.join(",")
-            log_diff = (changes[:diff] || []).map { |table| "'#{table}'" }.join(",")
+            log_new = (changes[:new] || []).map { |table| "#{table}" }.join(",")
+            log_old = (changes[:old] || []).map { |table| "#{table}" }.join(",")
+            log_diff = (changes[:diff] || []).map { |table| "#{table}" }.join(",")
 
-            record.where(transaction_id: event.transaction_id, action: "update").update_all(<<~SQL)
-              new = CASE WHEN table_name = ANY (ARRAY[#{log_new}]::varchar[]) THEN new ELSE null END,
-              old = CASE WHEN table_name = ANY (ARRAY[#{log_old}]::varchar[]) THEN old ELSE null END,
-              diff =
-                CASE WHEN table_name = ANY (ARRAY[#{log_diff}]::varchar[]) THEN (
-                  SELECT
-                    jsonb_object_agg(
-                      coalesce(old_kv.key, new_kv.key),
-                      jsonb_build_array(old_kv.value, new_kv.value)
-                    )
-                  FROM jsonb_each(old) AS old_kv
-                  FULL OUTER JOIN jsonb_each(new) AS new_kv ON old_kv.key = new_kv.key
-                  WHERE old_kv.value IS DISTINCT FROM new_kv.value
-                )
-                ELSE null
-                END
-            SQL
+            @connection.exec_prepared("waldit_finish", [
+              event.transaction_id,
+              event.timestamp,
+              "{#{log_new}}",
+              "{#{log_old}}",
+              "{#{log_diff}}",
+            ])
+
+            # We sucessful retried a connection, let's reset our retry state
+            @retry = false
 
           when InsertEvent
             tables << event.table
-            unless insert_prepared
-              prepare_insert
-              insert_prepared = true
-            end
             audit_event(event)
 
           when UpdateEvent
             tables << event.table
-            unless update_prepared
-              prepare_update
-              update_prepared = true
-            end
             audit_event(event)
 
           when DeleteEvent
             tables << event.table
-            unless delete_prepared
-              prepare_delete
-              prepare_delete_cleanup
-              delete_prepared = true
-            end
             audit_event(event)
           end
         end
       end
+    rescue PG::ConnectionBad
+      raise if @retry
+      # Let's try to fetch a new connection and reprocess the transaction
+      initialize_connection
+      @retry = true
+      retry
     end
 
     def should_watch_table?(table)
@@ -125,6 +111,15 @@ module Waldit
 
     private
 
+    def initialize_connection
+      @connection = record.connection.raw_connection
+      prepare_insert
+      prepare_update
+      prepare_delete
+      prepare_delete_cleanup
+      prepare_finish
+    end
+
     def prepare_insert
       @connection.prepare("waldit_insert", <<~SQL)
         INSERT INTO #{record.table_name} (transaction_id, lsn, table_name, primary_key, action, context, new)
@@ -132,6 +127,7 @@ module Waldit
         ON CONFLICT (table_name, primary_key, transaction_id)
         DO UPDATE SET new = #{record.table_name}.new
       SQL
+    rescue PG::DuplicatePstatement
     end
 
     def prepare_update
@@ -141,6 +137,7 @@ module Waldit
         ON CONFLICT (table_name, primary_key, transaction_id)
         DO UPDATE SET new = excluded.new
       SQL
+    rescue PG::DuplicatePstatement
     end
 
     def prepare_delete
@@ -150,6 +147,7 @@ module Waldit
         ON CONFLICT (table_name, primary_key, transaction_id)
         DO UPDATE SET old = #{record.table_name}.old
       SQL
+    rescue PG::DuplicatePstatement
     end
 
     def prepare_delete_cleanup
@@ -162,6 +160,32 @@ module Waldit
           AND action IN ('insert'::waldit_action, 'update'::waldit_action)
         RETURNING action, old
       SQL
+    rescue PG::DuplicatePstatement
+    end
+
+    def prepare_finish
+      @connection.prepare("waldit_finish", <<~SQL)
+        UPDATE #{record.table_name}
+        SET
+          committed_at = $2,
+          new = CASE WHEN table_name = ANY ($3::varchar[]) THEN new ELSE null END,
+          old = CASE WHEN table_name = ANY ($4::varchar[]) THEN old ELSE null END,
+          diff =
+            CASE WHEN table_name = ANY ($5::varchar[]) THEN (
+              SELECT
+                jsonb_object_agg(
+                  coalesce(old_kv.key, new_kv.key),
+                  jsonb_build_array(old_kv.value, new_kv.value)
+                )
+              FROM jsonb_each(old) AS old_kv
+              FULL OUTER JOIN jsonb_each(new) AS new_kv ON old_kv.key = new_kv.key
+              WHERE old_kv.value IS DISTINCT FROM new_kv.value
+            )
+            ELSE null
+            END
+        WHERE transaction_id = $1
+      SQL
+    rescue PG::DuplicatePstatement
     end
   end
 end
