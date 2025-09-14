@@ -168,10 +168,10 @@ module Waldit
         UPDATE #{record.table_name}
         SET
           committed_at = $2,
-          new = CASE WHEN table_name = ANY ($3::varchar[]) THEN new ELSE null END,
-          old = CASE WHEN table_name = ANY ($4::varchar[]) THEN old ELSE null END,
+          new = CASE WHEN action = 'insert' OR table_name = ANY ($3::varchar[]) THEN new ELSE null END,
+          old = CASE WHEN action = 'delete' OR table_name = ANY ($4::varchar[]) THEN old ELSE null END,
           diff =
-            CASE WHEN table_name = ANY ($5::varchar[]) THEN (
+            CASE WHEN action = 'update' AND table_name = ANY ($5::varchar[]) THEN (
               SELECT
                 jsonb_object_agg(
                   coalesce(old_kv.key, new_kv.key),
