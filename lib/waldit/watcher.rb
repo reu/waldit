@@ -112,7 +112,7 @@ module Waldit
     private
 
     def initialize_connection
-      @connection = record.connection.raw_connection
+      @connection = record.connection_pool.checkout.raw_connection
       prepare_insert
       prepare_update
       prepare_delete
