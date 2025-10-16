@@ -35,12 +35,14 @@ module Waldit
       end
     end
 
+    def initialize(*)
+      super
+      initialize_connection
+      @retry = false
+    end
+
     def on_transaction_events(events)
-      initialize_connection if @connection.nil?
-
       @connection.transaction do
-        @retrying = false
-
         tables = Set.new
 
         events.each do |event|
@@ -62,6 +64,8 @@ module Waldit
               "{#{log_diff}}",
             ])
 
+            # We sucessful retried a connection, let's reset our retry state
+            @retry = false
 
           when InsertEvent
             tables << event.table
@@ -78,13 +82,11 @@ module Waldit
         end
       end
     rescue PG::ConnectionBad
-      raise if @retrying # We already retried and still got a bad connection, let's just bail out
-
-      record.connection_pool.remove @active_record_connection
-      @connection = @active_record_connection = nil
-
-      @retrying = true
-      retry # Let's try to fetch a new connection and reprocess the transaction
+      raise if @retry
+      # Let's try to fetch a new connection and reprocess the transaction
+      initialize_connection
+      @retry = true
+      retry
     end
 
     def should_watch_table?(table)
@@ -110,8 +112,7 @@ module Waldit
     private
 
     def initialize_connection
-      @active_record_connection = record.connection_pool.checkout
-      @connection = @active_record_connection.raw_connection
+      @connection = record.connection_pool.checkout.raw_connection
       prepare_insert
       prepare_update
       prepare_delete
