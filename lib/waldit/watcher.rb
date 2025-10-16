@@ -52,16 +52,22 @@ module Waldit
               .map { |diff| [diff, tables.filter { |table| Waldit.store_changes.call(table).include? diff }] }
               .to_h
 
-            log_new = (changes[:new] || []).map { |table| "#{table}" }.join(",")
-            log_old = (changes[:old] || []).map { |table| "#{table}" }.join(",")
-            log_diff = (changes[:diff] || []).map { |table| "#{table}" }.join(",")
+            log_new = (changes[:new] || []).map { |table| "#{table}" }
+            log_old = (changes[:old] || []).map { |table| "#{table}" }
+            log_diff = (changes[:diff] || []).map { |table| "#{table}" }
 
             @connection.exec_prepared("waldit_finish", [
               event.transaction_id,
               event.timestamp,
-              "{#{log_new}}",
-              "{#{log_old}}",
-              "{#{log_diff}}",
+              "{#{log_new.join(",")}}",
+              "{#{log_old.join(",")}}",
+              "{#{log_diff.join(",")}}",
+            ])
+
+            @connection.exec_prepared("waldit_cleanup", [
+              event.transaction_id,
+              "{#{(log_new + log_old).join(",")}}",
+              "{#{log_diff.join(",")}}",
             ])
 
             # We sucessful retried a connection, let's reset our retry state
@@ -118,6 +124,7 @@ module Waldit
       prepare_delete
       prepare_delete_cleanup
       prepare_finish
+      prepare_cleanup
     end
 
     def prepare_insert
@@ -184,6 +191,21 @@ module Waldit
             ELSE null
             END
         WHERE transaction_id = $1
+      SQL
+    rescue PG::DuplicatePstatement
+    end
+
+    def prepare_cleanup
+      @connection.prepare("waldit_cleanup", <<~SQL)
+        DELETE FROM #{record.table_name}
+        WHERE
+          transaction_id = $1
+          AND action = 'update'::waldit_action
+          AND (
+            (diff IS NULL AND table_name = ANY ($3::varchar[]))
+            OR
+            (new = old AND table_name = ANY ($2::varchar[]))
+          )
       SQL
     rescue PG::DuplicatePstatement
     end

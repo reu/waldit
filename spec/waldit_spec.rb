@@ -46,6 +46,27 @@ RSpec.describe Waldit do
     record&.delete
   end
 
+  it "doesn't audit anything when the record is updated multiple times but ends up unchanged on the same transaction" do
+    record = Record.create(name: "1")
+
+    watcher = Waldit::Watcher.new
+    replication = create_testing_wal_replication(watcher)
+
+    Record.transaction do
+      record.update(name: "2")
+      record.update(name: "3")
+      record.update(name: "2")
+      record.update(name: "1")
+    end
+
+    replicate_single_transaction(replication)
+
+    assert_empty Waldit.model.all
+  ensure
+    Waldit.model.delete_all
+    record&.delete
+  end
+
   it "doesn't audit anything when the record is created and deleted on the same transaction" do
     watcher = Waldit::Watcher.new
     replication = create_testing_wal_replication(watcher)

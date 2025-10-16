@@ -26,6 +26,7 @@ RSpec.configure do |config|
       username: pg_container.username,
       password: pg_container.password,
       port: pg_container.first_mapped_port,
+      pool: 50,
     }
 
     ActiveRecord::ConnectionAdapters.register(
