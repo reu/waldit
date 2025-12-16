@@ -2,7 +2,7 @@
 module Waldit
   extend T::Sig
   extend Waldit::Context
-  VERSION = "0.0.21"
+  VERSION = "0.0.22"
 
   class << self
     sig { returns(String) }
