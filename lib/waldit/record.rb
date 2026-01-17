@@ -11,6 +11,10 @@ module Waldit
       end
     end
 
+    def primary_key
+      self[:primary_key]&.then { |key| JSON.parse(key) }
+    end
+
     def new
       return self[:new] if self[:new]
       (self[:diff] || {}).transform_values { |_old, new| new }

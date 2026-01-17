@@ -8,8 +8,9 @@ module Waldit
 
     def audit_event(event)
       return unless event.primary_key
+      primary_key = event.primary_key.to_json
 
-      audit = [event.transaction_id, event.lsn, event.table, event.primary_key, event.context.to_json]
+      audit = [event.transaction_id, event.lsn, event.table, primary_key, event.context.to_json]
 
       case event
       when InsertEvent
@@ -24,7 +25,7 @@ module Waldit
         @connection.exec_prepared("waldit_update", audit + [old_attributes.to_json, new_attributes.to_json])
 
       when DeleteEvent
-        case @connection.exec_prepared("waldit_delete_cleanup", [event.transaction_id, event.table, event.primary_key]).values
+        case @connection.exec_prepared("waldit_delete_cleanup", [event.transaction_id, event.table, primary_key]).values
         in [["update", previous_old]]
           @connection.exec_prepared("waldit_delete", audit + [previous_old])
         in []
