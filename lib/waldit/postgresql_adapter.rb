@@ -4,7 +4,7 @@ require "active_record/connection_adapters/postgresql_adapter"
 
 module Waldit
   class PostgreSQLAdapter < ActiveRecord::ConnectionAdapters::PostgreSQLAdapter
-    READ_QUERY_REGEXP = build_read_query_regexp(*%i[close create drop fetch move set show])
+    READ_QUERY_REGEXP = build_read_query_regexp(*%i[close create declare drop fetch move set show])
 
     def raw_execute(sql, ...)
       return super if READ_QUERY_REGEXP.match? sql
