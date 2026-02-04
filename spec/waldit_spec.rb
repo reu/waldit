@@ -1,6 +1,43 @@
 require "spec_helper"
 
 RSpec.describe Waldit do
+  it "orders audit trail by committed_at and lsn" do
+    record = Record.create(name: "original")
+    committed_at = Time.now
+
+    Waldit.model.create!(
+      action: "update",
+      table_name: "records",
+      primary_key: record.id,
+      transaction_id: 9001,
+      lsn: 2,
+      committed_at:,
+      old: { name: "first" },
+      new: { name: "second" }
+    )
+
+    Waldit.model.create!(
+      action: "update",
+      table_name: "records",
+      primary_key: record.id,
+      transaction_id: 9000,
+      lsn: 1,
+      committed_at:,
+      old: { name: "original" },
+      new: { name: "first" }
+    )
+
+    audit_trail = Waldit.model.for(record)
+
+    assert_equal 2, audit_trail.count
+    assert audit_trail.first.lsn < audit_trail.second.lsn
+    assert_equal "first", audit_trail.first.new["name"]
+    assert_equal "second", audit_trail.second.new["name"]
+  ensure
+    Waldit.model.delete_all
+    record&.delete
+  end
+
   it "audits creation if a record is created and them updated on the same transaction" do
     watcher = Waldit::Watcher.new
     replication = create_testing_wal_replication(watcher)
