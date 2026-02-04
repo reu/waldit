@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "active_support/core_ext/module/delegation"
 require "rails/railtie"
 
 module Waldit
