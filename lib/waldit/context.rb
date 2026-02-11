@@ -2,7 +2,7 @@
 
 module Waldit
   module Context
-    def with_context(context, &block)
+    def with_context(context = {}, &block)
       current_context = self.context || {}
       Thread.current[:waldit_context] ||= []
       Thread.current[:waldit_context].push(current_context.merge(context.as_json))
