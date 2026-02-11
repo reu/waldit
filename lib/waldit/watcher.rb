@@ -49,27 +49,29 @@ module Waldit
         events.each do |event|
           case event
           when CommitTransactionEvent
-            changes = [:old, :new, :diff]
-              .map { |diff| [diff, tables.filter { |table| Waldit.store_changes.call(table).include? diff }] }
-              .to_h
+            unless tables.empty?
+              changes = [:old, :new, :diff]
+                .map { |diff| [diff, tables.filter { |table| Waldit.store_changes.call(table).include? diff }] }
+                .to_h
 
-            log_new = (changes[:new] || []).map { |table| "#{table}" }
-            log_old = (changes[:old] || []).map { |table| "#{table}" }
-            log_diff = (changes[:diff] || []).map { |table| "#{table}" }
+              log_new = (changes[:new] || []).map { |table| "#{table}" }
+              log_old = (changes[:old] || []).map { |table| "#{table}" }
+              log_diff = (changes[:diff] || []).map { |table| "#{table}" }
 
-            @connection.exec_prepared("waldit_finish", [
-              event.transaction_id,
-              event.timestamp,
-              "{#{log_new.join(",")}}",
-              "{#{log_old.join(",")}}",
-              "{#{log_diff.join(",")}}",
-            ])
+              @connection.exec_prepared("waldit_finish", [
+                event.transaction_id,
+                event.timestamp,
+                "{#{log_new.join(",")}}",
+                "{#{log_old.join(",")}}",
+                "{#{log_diff.join(",")}}",
+              ])
 
-            @connection.exec_prepared("waldit_cleanup", [
-              event.transaction_id,
-              "{#{(log_new + log_old).join(",")}}",
-              "{#{log_diff.join(",")}}",
-            ])
+              @connection.exec_prepared("waldit_cleanup", [
+                event.transaction_id,
+                "{#{(log_new + log_old).join(",")}}",
+                "{#{log_diff.join(",")}}",
+              ])
+            end
 
             # We sucessful retried a connection, let's reset our retry state
             @retry = false
