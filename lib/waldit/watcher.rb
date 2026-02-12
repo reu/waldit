@@ -246,29 +246,30 @@ module Waldit
     def audit_event(event)
       return unless event.primary_key
       primary_key = event.primary_key.to_json
+      table = event.full_table_name
 
-      audit = [event.transaction_id, event.lsn, event.table, primary_key, event.context.to_json]
+      audit = [event.transaction_id, event.lsn, table, primary_key, event.context.to_json]
 
       case event
       when InsertEvent
-        new_attributes = clean_attributes(event.table, event.new)
+        new_attributes = clean_attributes(table, event.new)
         @connection.exec_prepared("waldit_insert", audit + [new_attributes.to_json])
         true
 
       when UpdateEvent
-        return if event.diff.without(ignored_columns(event.table)).empty?
-        old_attributes = clean_attributes(event.table, event.old)
-        new_attributes = clean_attributes(event.table, event.new)
+        return if event.diff.without(ignored_columns(table)).empty?
+        old_attributes = clean_attributes(table, event.old)
+        new_attributes = clean_attributes(table, event.new)
 
         @connection.exec_prepared("waldit_update", audit + [old_attributes.to_json, new_attributes.to_json])
         true
 
       when DeleteEvent
-        case @connection.exec_prepared("waldit_delete_cleanup", [event.transaction_id, event.table, primary_key]).values
+        case @connection.exec_prepared("waldit_delete_cleanup", [event.transaction_id, table, primary_key]).values
         in [["update", previous_old]]
           @connection.exec_prepared("waldit_delete", audit + [previous_old])
         in []
-          @connection.exec_prepared("waldit_delete", audit + [clean_attributes(event.table, event.old).to_json])
+          @connection.exec_prepared("waldit_delete", audit + [clean_attributes(table, event.old).to_json])
         else
           # Don't need to audit anything on this case
         end
