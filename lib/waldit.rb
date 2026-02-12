@@ -39,6 +39,7 @@ module Waldit
     attr_accessor :ignored_columns
     attr_accessor :model
     attr_accessor :context_prefix
+    attr_accessor :large_transaction_threshold
   end
 
   def self.configure(&block)
@@ -53,6 +54,8 @@ module Waldit
     config.store_changes = -> table { %i[old new] }
 
     config.ignored_columns = -> table { %w[created_at updated_at] }
+
+    config.large_transaction_threshold = 1_000_000
 
     config.model = Class.new(ActiveRecord::Base) do
       include Waldit::Record
