@@ -28,7 +28,7 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "wal", ">= 0.0.8"
+  spec.add_dependency "wal", ">= 0.0.35"
   spec.add_dependency "activerecord", ">= 7"
 
   spec.add_development_dependency "sidekiq"
