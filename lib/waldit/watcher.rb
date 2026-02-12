@@ -16,6 +16,7 @@ module Waldit
       when InsertEvent
         new_attributes = clean_attributes(event.table, event.new)
         @connection.exec_prepared("waldit_insert", audit + [new_attributes.to_json])
+        true
 
       when UpdateEvent
         return if event.diff.without(ignored_columns(event.table)).empty?
@@ -23,6 +24,7 @@ module Waldit
         new_attributes = clean_attributes(event.table, event.new)
 
         @connection.exec_prepared("waldit_update", audit + [old_attributes.to_json, new_attributes.to_json])
+        true
 
       when DeleteEvent
         case @connection.exec_prepared("waldit_delete_cleanup", [event.transaction_id, event.table, primary_key]).values
@@ -33,6 +35,7 @@ module Waldit
         else
           # Don't need to audit anything on this case
         end
+        true
       end
     end
 
@@ -77,16 +80,13 @@ module Waldit
             @retry = false
 
           when InsertEvent
-            tables << event.table
-            audit_event(event)
+            tables << event.table if audit_event(event)
 
           when UpdateEvent
-            tables << event.table
-            audit_event(event)
+            tables << event.table if audit_event(event)
 
           when DeleteEvent
-            tables << event.table
-            audit_event(event)
+            tables << event.table if audit_event(event)
           end
         end
       end
