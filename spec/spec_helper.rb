@@ -46,6 +46,7 @@ RSpec.configure do |config|
 
       create_table :records, force: true do |t|
         t.string :name
+        t.timestamps
       end
 
       add_table_to_waldit :records
