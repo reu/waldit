@@ -158,9 +158,9 @@ Waldit.configure do |config|
   # Options: :old, :new, :diff (any combination)
   config.store_changes = [:old, :new]
 
-  # WAL byte threshold for switching to streaming mode (default: 1MB)
+  # WAL byte threshold for switching to streaming mode (default: 10MB)
   # Transactions smaller than this are processed in memory for better performance
-  config.large_transaction_threshold = 1_000_000
+  config.large_transaction_threshold = 10_000_000
 end
 ```
 

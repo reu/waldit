@@ -55,7 +55,7 @@ module Waldit
 
     config.ignored_columns = -> table { %w[created_at updated_at] }
 
-    config.large_transaction_threshold = 1_000_000
+    config.large_transaction_threshold = 10_000_000
 
     config.model = Class.new(ActiveRecord::Base) do
       include Waldit::Record
