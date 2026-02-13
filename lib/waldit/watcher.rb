@@ -13,16 +13,11 @@ module Waldit
     end
 
     def on_transaction_events(events)
-      events.each do |event|
-        case event
-        when BeginTransactionEvent
-          if event.estimated_size < Waldit.large_transaction_threshold
-            process_in_memory(event, events)
-          else
-            process_streaming(event, events)
-          end
-          return
-        end
+      begin_event = events.next
+      if begin_event.estimated_size < Waldit.large_transaction_threshold
+        process_in_memory(events)
+      else
+        process_streaming(events)
       end
     rescue PG::ConnectionBad
       raise if @retry
@@ -73,7 +68,7 @@ module Waldit
     PARAMS_PER_ROW = COLUMNS.size
     MAX_ROWS_PER_BATCH = 65535 / PARAMS_PER_ROW
 
-    def process_in_memory(begin_event, events)
+    def process_in_memory(events)
       records = {}
 
       events.each do |event|
@@ -206,7 +201,7 @@ module Waldit
       SQL
     end
 
-    def process_streaming(begin_event, events)
+    def process_streaming(events)
       ensure_streaming_statements_prepared
 
       @connection.transaction do
