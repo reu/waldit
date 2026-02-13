@@ -1,117 +1,231 @@
 # Waldit
 
-[![Gem Version](https://badge.fury.io/rb/waldit.svg)](https://badge.fury.io/rb/waldit)
+Waldit is a Postgres-based audit trail for Rails.
 
-Waldit is a Ruby gem that provides a simple and extensible way to audit changes to your ActiveRecord models. It leverages PostgreSQL's logical replication capabilities to capture changes directly from your database with 100% consistency.
+It hooks into [Postgres logical replication](https://www.postgresql.org/docs/current/logical-replication.html) via the [`wal`](https://github.com/reu/wal) gem to capture every `insert`, `update`, and `delete` directly from the WAL. Unlike ActiveRecord callbacks, these events are guaranteed by Postgres to be 100% consistent -- even changes that bypass Rails entirely are captured.
 
-## Features
+## Getting started
 
-- **Automatic Auditing:** Automatically track `create`, `update`, and `delete` operations on your models.
-- **Contextual Auditing:** Add custom context to your audit records to understand who made the change and why.
-- **Flexible Configuration:** Configure which tables and columns to watch, and how to store audit information.
-- **High Performance:** Built on top of [`wal`](https://github.com/reu/wal), which uses PostgreSQL's logical replication for minimal overhead.
+### Installation
 
-## Installation
-
-Add this line to your application's Gemfile:
+Add `waldit` to your application's Gemfile:
 
 ```ruby
 gem "waldit"
 ```
 
-And then execute:
+### Database adapter
 
-    $ bundle
+Waldit ships a custom database adapter that injects audit context into your transactions. Update your `config/database.yml`:
 
-Or install it yourself as:
+```yaml
+default: &default
+  adapter: waldit
+  # ... rest of your config
+```
 
-    $ gem install waldit
+### Migrations
 
-## Usage
+Waldit provides migration helpers. First, create the audit table and publication:
 
-1.  **Configure your database adapter:**
+```ruby
+class SetupWaldit < ActiveRecord::Migration[7.0]
+  def change
+    create_waldit_table
+    create_waldit_publication
+  end
+end
+```
 
-    First step is to configure in your `config/database.yml` and change your adapter to `waldit`, which is a special adapter that allows injecting `waldit` contextual information on your transactions:
+Then, for each table you want to audit:
 
-    ```yaml
-    default: &default
-      adapter: waldit
-      # ...
-    ```
+```ruby
+class AuditUsers < ActiveRecord::Migration[7.0]
+  def change
+    add_table_to_waldit :users
+  end
+end
+```
 
-2.  **Create an audit table:**
+This sets `REPLICA IDENTITY FULL` on the table and adds it to the Waldit publication.
 
-    Generate a migration to create the `waldit` table:
+### Running the watcher
 
-    ```bash
-    rails generate migration create_waldit
-    ```
+Create a `config/waldit.yml`:
 
-    And then add the following to your migration file:
+```yaml
+slots:
+  audit:
+    publications: [waldit_publication]
+    watcher: Waldit::Watcher
+```
 
-    ```ruby
-    class CreateWalditTable < ActiveRecord::Migration[7.0]
-      def change
-        create_table :waldit do |t|
-          t.bigint :transaction_id, null: false
-          t.bigint :lsn, null: false
-          t.string :action, null: false
-          t.jsonb :context, default: {}
-          t.string :table_name, null: false
-          t.string :primary_key, null: false
-          t.jsonb :old, default: {}
-          t.jsonb :new, default: {}
-          t.timestamp :commited_at
+Then start the process:
 
-          t.index [:table_name, :primary_key, :transaction_id], unique: true
-        end
-      end
-    end
-    ```
+```bash
+bundle exec wal start config/waldit.yml
+```
 
-3.  **Configure Waldit:**
+That's it. Every change to your audited tables is now being recorded.
 
-    Create an initializer file at `config/initializers/waldit.rb`:
+## Adding context
 
-    ```ruby
-    Waldit.configure do |config|
-      # A callback that returns true if a table should be watched.
-      config.watched_tables = ->(table) { table != "waldit" }
+Wrap your operations with `Waldit.with_context` to record who made the change and why:
 
-      # A callback that returns an array of columns to ignore for a given table.
-      config.ignored_columns = ->(table) { %w[created_at updated_at] }
-    end
-    ```
+```ruby
+Waldit.with_context(user_id: current_user.id, reason: "Profile update") do
+  user.update(name: "New Name")
+end
+```
 
-4.  **Add context to your changes:**
+Context can be nested and updated mid-transaction:
 
-    Use the `with_context` method to add context to your database operations:
+```ruby
+Waldit.with_context(user_id: current_user.id) do
+  user.update(name: "New Name")
 
-    ```ruby
-    Waldit.with_context(user_id: 1, reason: "User updated their profile") do
-      user.update(name: "New Name")
-    end
-    ```
+  Waldit.with_context(via: "admin_panel") do
+    account.update(plan: "premium")  # context: { user_id: 1, via: "admin_panel" }
+  end
 
-5.  **Start the watcher:**
+  Waldit.add_context(batch: true)
+  other_user.update(name: "Other")  # context: { user_id: 1, batch: true }
+end
+```
 
-    To process the events, you need to start a WAL watcher. The recommended way is to have a config/waldit.yml
+### Sidekiq integration
 
-    ```yml
-    slots:
-      audit:
-        publications: [waldit_publication]
-        watcher: Waldit::Watcher
-    ```
+Waldit can propagate context into background jobs:
 
-    And then run:
+```ruby
+# config/initializers/sidekiq.rb
+Sidekiq.configure_client do |config|
+  config.client_middleware do |chain|
+    chain.add Waldit::Sidekiq::SaveContext
+  end
+end
 
-    ```bash
-    bundle exec wal start config/waldit.yml
-    ```
+Sidekiq.configure_server do |config|
+  config.server_middleware do |chain|
+    chain.add Waldit::Sidekiq::LoadContext
+  end
+end
+```
 
-## How it Works
+## Querying the audit trail
 
-Waldit uses a custom PostgreSQL adapter to set the `waldit_context` session variable before each transaction. This context is then captured by the logical replication slot and stored in the `waldit` table by the `Waldit::Watcher`.
+Waldit provides scopes on the audit model:
 
-The `Waldit::Watcher` is a streaming watcher that listens for changes in the logical replication slot and creates audit records in the `waldit` table. It processes events in batches to minimize the number of database transactions.
+```ruby
+# All audit records for a specific record
+Waldit.model.for(user)
+
+# All audit records for a table
+Waldit.model.from_model(User)
+
+# All audit records with a specific context
+Waldit.model.with_context(user_id: 1)
+```
+
+Each audit record exposes:
+
+```ruby
+audit = Waldit.model.for(user).last
+
+audit.action       # "insert", "update", or "delete"
+audit.old          # previous attributes (updates and deletes)
+audit.new          # new attributes (inserts and updates)
+audit.diff         # changed attributes as { "name" => ["old", "new"] }
+audit.context      # the context hash
+audit.committed_at # when the transaction was committed
+audit.primary_key  # the record's primary key
+```
+
+The `old`, `new`, and `diff` accessors are smart -- if you only store `:diff`, calling `.old` or `.new` will compute the values from the diff, and vice versa.
+
+## Configuration
+
+```ruby
+# config/initializers/waldit.rb
+Waldit.configure do |config|
+  # Which tables to watch (default: all except "waldit")
+  config.watched_tables = -> table { table != "waldit" }
+
+  # Columns to exclude from audit records (default: created_at, updated_at)
+  config.ignored_columns = -> table { %w[created_at updated_at] }
+
+  # What to store per table (default: [:old, :new])
+  # Options: :old, :new, :diff (any combination)
+  config.store_changes = [:old, :new]
+
+  # WAL byte threshold for switching to streaming mode (default: 1MB)
+  # Transactions smaller than this are processed in memory for better performance
+  config.large_transaction_threshold = 1_000_000
+end
+```
+
+### Storage policies
+
+By default, Waldit stores both `old` and `new` attributes for every change. You can reduce storage by only keeping what you need:
+
+```ruby
+# Only store diffs for updates (most compact)
+config.store_changes = :diff
+
+# Per-table policies
+config.store_changes = -> table {
+  case table
+  when "events" then [:new]
+  when "logs"   then [:diff]
+  else               [:old, :new]
+  end
+}
+```
+
+### Per-table ignored columns
+
+```ruby
+config.ignored_columns = -> table {
+  case table
+  when "users" then %w[created_at updated_at last_sign_in_at]
+  else              %w[created_at updated_at]
+  end
+}
+```
+
+### Custom audit model
+
+You can provide your own model class if you need custom methods or a different table name:
+
+```ruby
+class AuditRecord < ApplicationRecord
+  include Waldit::Record
+  self.table_name = "waldit"
+end
+
+Waldit.configure do |config|
+  config.model = AuditRecord
+end
+```
+
+## How it works
+
+Waldit uses Postgres logical replication to stream changes from the WAL (Write-Ahead Log). The flow is:
+
+1. The custom database adapter sets a `waldit_context` session variable before each write operation
+2. Postgres captures the change and the context in the WAL
+3. `Waldit::Watcher` receives the events via a replication slot
+4. Events are deduplicated per-transaction (multiple updates to the same record produce a single audit entry)
+5. The final audit records are persisted to the `waldit` table
+
+For small transactions, events are accumulated in memory and persisted in a single batch insert. For large transactions (configurable via `large_transaction_threshold`), events are streamed and persisted individually to avoid memory pressure.
+
+### Transaction-level deduplication
+
+Within a single database transaction, Waldit collapses events intelligently:
+
+- **Insert then update** -- recorded as a single `insert` with the final state
+- **Multiple updates** -- recorded as a single `update` with the original `old` and final `new`
+- **Insert then delete** -- not recorded (the record never existed outside the transaction)
+- **Update then delete** -- recorded as a `delete` with the original `old` values
+- **Update that reverts to original** -- not recorded (no net change)
