@@ -57,6 +57,22 @@ module Waldit
 
     private
 
+    COLUMNS = %w[
+      transaction_id
+      lsn
+      table_name
+      primary_key
+      action
+      context
+      committed_at
+      old
+      new
+      diff
+    ].freeze
+
+    PARAMS_PER_ROW = COLUMNS.size
+    MAX_ROWS_PER_BATCH = 65535 / PARAMS_PER_ROW
+
     def process_in_memory(begin_event, events)
       records = {}
 
@@ -133,30 +149,25 @@ module Waldit
               { **rec, action: "delete", old: clean_attributes(table, evt.old) }
             end
           end
-          persist_batch(rows) unless rows.empty?
+
+          unless rows.empty?
+            if rows.size <= MAX_ROWS_PER_BATCH
+              insert_batch(rows)
+            else
+              @connection.transaction do
+                rows.each_slice(MAX_ROWS_PER_BATCH) { |batch| insert_batch(batch) }
+              end
+            end
+          end
+
           @retry = false
         end
       end
     end
 
-    def persist_batch(records)
-      return if records.empty?
-
-      cols = %w[
-        transaction_id
-        lsn
-        table_name
-        primary_key
-        action
-        context
-        committed_at
-        old
-        new
-        diff
-      ]
-
-      rows = records.each_with_index.map do |_, i|
-        o = i * cols.size
+    def insert_batch(batch)
+      rows = batch.each_with_index.map do |_, i|
+        o = i * PARAMS_PER_ROW
         row = [
           "$#{o + 1}",
           "$#{o + 2}",
@@ -172,7 +183,7 @@ module Waldit
         "(#{row})"
       end
 
-      params = records.flat_map do |r|
+      params = batch.flat_map do |r|
         [
           r[:transaction_id],
           r[:lsn],
@@ -188,7 +199,7 @@ module Waldit
       end
 
       @connection.exec_params(<<~SQL, params)
-        INSERT INTO #{record.table_name} (#{cols.join(",")})
+        INSERT INTO #{record.table_name} (#{COLUMNS.join(",")})
         VALUES #{rows.join(",")}
         ON CONFLICT (table_name, primary_key, transaction_id)
         DO NOTHING
