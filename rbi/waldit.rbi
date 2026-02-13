@@ -19,6 +19,9 @@ module Waldit
 
     sig { returns(T.class_of(ActiveRecord::Base)) }
     attr_accessor :model
+
+    sig { returns(Integer) }
+    attr_accessor :large_transaction_threshold
   end
 
   sig { params(tables: T.any(T::Array[String], T.proc.params(table: String).returns(T::Boolean))).void }
